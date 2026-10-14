@@ -100,3 +100,13 @@ __tests__/runner/*
 # IDE files
 .idea
 *.code-workspace
+bot/venv/
+bot/__pycache__/
+bot/*.pre-*
+scheduler/*.pre-*
+scheduler/*.before-*
+scheduler/.*.lock
+package-lock.json
+scheduler/__pycache__/
+scheduler/today.json
+src/main.ts.backup

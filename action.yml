@@ -11,6 +11,10 @@ branding:
 
 # Define your inputs here.
 inputs:
+  mode:
+    description: 'Update mode: headline, resume, or both'
+    required: false
+    default: 'both'
   username:
     description: 'Naukri.com email'
     required: true

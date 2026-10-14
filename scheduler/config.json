@@ -1,0 +1,26 @@
+{
+  "timezone": "Asia/Kolkata",
+  "updates_per_day": 3,
+  "windows": [
+    {
+      "start": "09:00",
+      "end": "11:00",
+      "action": "headline"
+    },
+    {
+      "start": "13:00",
+      "end": "15:00",
+      "action": "resume"
+    },
+    {
+      "start": "18:00",
+      "end": "20:00",
+      "action": "random"
+    }
+  ],
+  "random_action_options": [
+    "headline",
+    "resume",
+    "both"
+  ]
+}

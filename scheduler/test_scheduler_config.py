@@ -4,7 +4,7 @@ import sys
 import tempfile
 import types
 import unittest
-from contextlib import contextmanager, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
@@ -262,6 +262,20 @@ class SchedulerConfigTests(unittest.TestCase):
             self.assertNotIn("timezone", state)
             install.assert_called_once_with(runs)
 
+    def test_force_regeneration_remains_blocked_after_first_window_begins(self):
+        local_now = datetime(
+            2026, 1, 1, 8, 30, tzinfo=scheduler.local_now().tzinfo
+        )
+        with (
+            patch.object(scheduler, "read_config", return_value=valid_config()),
+            patch.object(scheduler, "local_now", return_value=local_now),
+            patch.object(scheduler, "locked", no_lock),
+        ):
+            with self.assertRaisesRegex(
+                ValueError, "after the first update window has begun"
+            ):
+                scheduler.generate(force=True)
+
     def test_dry_run_preserves_saved_state_and_uses_local_date(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             state_path = Path(temporary_directory) / "today.json"
@@ -335,6 +349,57 @@ class SchedulerConfigTests(unittest.TestCase):
         self.assertIn("schedule_config", command_names)
         self.assertIn("schedule_show", command_names)
         self.assertIn("schedule_regenerate", command_names)
+
+        regenerate = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "schedule_regenerate_command"
+        )
+        self.assertIn(
+            scheduler.NO_ERROR_NOTIFICATION,
+            [
+                node.value
+                for node in ast.walk(regenerate)
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            ],
+        )
+
+    def test_command_triggered_regeneration_failure_is_not_webhook_notified(self):
+        with (
+            patch.object(
+                scheduler,
+                "generate",
+                side_effect=RuntimeError("regeneration is not allowed now"),
+            ),
+            patch.object(scheduler, "notify") as notify,
+            redirect_stderr(StringIO()),
+        ):
+            exit_code = scheduler.run_cli([
+                "generate",
+                "--force",
+                scheduler.NO_ERROR_NOTIFICATION,
+            ])
+
+        self.assertEqual(exit_code, 1)
+        notify.assert_not_called()
+
+    def test_cron_triggered_failure_still_sends_webhook_alert(self):
+        with (
+            patch.object(
+                scheduler,
+                "run_update",
+                side_effect=RuntimeError("scheduled run failed"),
+            ),
+            patch.object(scheduler, "notify") as notify,
+            redirect_stderr(StringIO()),
+        ):
+            exit_code = scheduler.run_cli(["run", "1"])
+
+        self.assertEqual(exit_code, 1)
+        notify.assert_called_once()
+        self.assertIn("Naukri scheduler error", notify.call_args.args[0])
+        self.assertIn("scheduled run failed", notify.call_args.args[0])
 
 
 if __name__ == "__main__":

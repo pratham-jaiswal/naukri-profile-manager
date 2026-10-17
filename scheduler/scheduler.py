@@ -20,6 +20,7 @@ STATE = SDIR / "today.json"
 STATE_LOCK = SDIR / ".state.lock"
 BEGIN = "# BEGIN NAUKRI GENERATED JOBS"
 END = "# END NAUKRI GENERATED JOBS"
+NO_ERROR_NOTIFICATION = "--no-error-notification"
 
 
 def local_now():
@@ -484,26 +485,37 @@ def manual_update(action):
         }
 
 
-def main():
-    if len(sys.argv) < 2:
+def main(args=None):
+    args = list(sys.argv[1:] if args is None else args)
+    args = [arg for arg in args if arg != NO_ERROR_NOTIFICATION]
+
+    if len(args) < 1:
         raise ValueError("Usage: scheduler.py generate | run RUN_ID")
 
-    if sys.argv[1] == "generate" and len(sys.argv) == 2:
+    if args[0] == "generate" and len(args) == 1:
         generate()
-    elif sys.argv[1:] == ["generate", "--dry-run"]:
+    elif args == ["generate", "--dry-run"]:
         generate(dry_run=True)
-    elif sys.argv[1] == "generate" and sys.argv[2:] == ["--force"]:
+    elif args[0] == "generate" and args[1:] == ["--force"]:
         generate(force=True)
-    elif sys.argv[1] == "run" and len(sys.argv) == 3:
-        run_update(int(sys.argv[2]))
+    elif args[0] == "run" and len(args) == 2:
+        run_update(int(args[1]))
     else:
         raise ValueError("Usage: scheduler.py generate | run RUN_ID")
 
 
-if __name__ == "__main__":
+def run_cli(args=None):
+    args = list(sys.argv[1:] if args is None else args)
+    suppress_error_notification = NO_ERROR_NOTIFICATION in args
     try:
-        main()
+        main(args)
     except Exception as exc:
         print(f"Scheduler error: {exc}", file=sys.stderr)
-        notify(f"🚨 **Naukri scheduler error**\n{type(exc).__name__}: {exc}")
-        sys.exit(1)
+        if not suppress_error_notification:
+            notify(f"🚨 **Naukri scheduler error**\n{type(exc).__name__}: {exc}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(run_cli())

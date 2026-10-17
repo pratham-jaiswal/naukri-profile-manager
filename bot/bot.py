@@ -399,7 +399,13 @@ async def schedule_regenerate_command(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True, thinking=True)
     result = await asyncio.to_thread(
         subprocess.run,
-        [sys.executable, str(SCHEDULER_FILE), "generate", "--force"],
+        [
+            sys.executable,
+            str(SCHEDULER_FILE),
+            "generate",
+            "--force",
+            "--no-error-notification",
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,

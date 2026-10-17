@@ -139,7 +139,6 @@ Edit `scheduler/config.json`:
 
 ```json
 {
-  "timezone": "Asia/Kolkata",
   "updates_per_day": 3,
   "windows": [
     {
@@ -171,35 +170,30 @@ This example schedules three updates per day:
 Times are selected randomly within the configured windows. The end of a window
 is exclusive: `09:00`–`11:00` permits times from 09:00 through 10:59.
 
-Adjust the windows and timezone to suit your needs. Generated cron jobs use the
-timezone in this file, independently of the server's configured timezone.
+The scheduler and cron use the VM's system timezone as their only timezone
+source. Changing the VM timezone with `timedatectl` changes the effective
+schedule timezone; there is no timezone setting in `scheduler/config.json` or
+the Discord bot. Existing config files with a `timezone` property are accepted
+but the property is ignored. Remove it manually, or save schedule settings with
+`/schedule_config` to write a clean config.
 
 ### 5. Enable cron scheduling
 
-The scheduler generates daily cron entries and runs the updates at their
-selected times. Generated entries set `CRON_TZ` only inside the marked block and
-restore the previous timezone setting after it.
+The scheduler generates daily cron entries and runs updates using the VM's
+system-local time. Cron interprets the generated times in that same host
+timezone. No `CRON_TZ` assignments are written.
 
-On each installation, the scheduler removes the previous block from
-`# BEGIN NAUKRI GENERATED JOBS` through `# END NAUKRI GENERATED JOBS` and
-rebuilds it with the configured timezone and that schedule's run entries. Every
-unmarked line, including custom jobs and environment assignments, is retained in
-its original relative order but placed before the rebuilt block. The final
-`CRON_TZ` line restores the last unmarked `CRON_TZ` assignment, or the system
-timezone if none exists. Do not put custom entries inside the marked block; they
-will be replaced. The installer does not add a schedule-generation cron job.
+On each installation, the scheduler replaces only the block from
+`# BEGIN NAUKRI GENERATED JOBS` through `# END NAUKRI GENERATED JOBS`. Lines
+outside it, including the permanent `00:05` schedule-generator job, are
+preserved in their original relative order, except for a legacy `CRON_TZ`
+restoration assignment immediately after the old block, which is removed. Do not
+put custom jobs inside the marked block. The generated block contains only the
+selected update jobs, with no timezone environment assignments.
 
-Before relying on `CRON_TZ`, verify support on the target VM using its installed
-cron package and manual:
-
-```bash
-dpkg-query -W -f='${Version}\n' cron
-zcat /usr/share/man/man5/crontab.5.gz | grep -n -A4 CRON_TZ
-```
-
-Do not deploy the timezone-based entries unless the installed cron documentation
-confirms `CRON_TZ` support. This workspace cannot verify the production VM's
-cron implementation remotely.
+To inspect the VM timezone, run `timedatectl`. Changing it with
+`sudo timedatectl set-timezone Region/City` affects future scheduling and cron
+execution. The production VM currently uses `Asia/Kolkata`.
 
 Example commands:
 
@@ -217,10 +211,10 @@ crontab as the same user that runs the scheduler:
 crontab -l
 ```
 
-Check that unrelated entries remain intact, that `CRON_TZ` is restored after
-`# END NAUKRI GENERATED JOBS`, and that no extra generation job was added. The
-`run 1` command performs a real update, so use it only when you intend to modify
-your Naukri profile.
+Check that unrelated entries and the permanent generator remain intact, that the
+generated block has no `CRON_TZ` assignment, and that no extra generation job
+was added. The `run 1` command performs a real update, so use it only when you
+intend to modify your Naukri profile.
 
 Keep the server running for scheduled jobs to execute.
 
@@ -397,7 +391,6 @@ itself.
 | `/resume_active`       | Show the active resume.                                                                       |
 | `/resume_switch`       | Switch to an existing resume.                                                                 |
 | `/schedule_show`       | Display the generated schedule.                                                               |
-| `/schedule_timezone`   | Set the timezone using an IANA timezone name.                                                 |
 | `/schedule_config`     | Set the update count and schedule windows using JSON.                                         |
 | `/schedule_regenerate` | Regenerate the schedule when permitted.                                                       |
 | `/status`              | Check bot and updater status.                                                                 |
@@ -530,7 +523,8 @@ sudo journalctl -u naukri-discord-bot -n 100 --no-pager
 - **Bot not responding:** Check the bot token, user ID, guild ID,
   application-command permissions, and systemd service.
 - **Scheduled update did not run:** Verify that the VM is running, cron is
-  active, the timezone is correct, and the generated schedule is current.
+  active, the VM system timezone matches your intended schedule, and the
+  generated schedule is current.
 
 ## 🔒 Security
 

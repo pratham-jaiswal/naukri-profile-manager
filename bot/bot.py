@@ -8,7 +8,6 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import discord
 from discord import app_commands
@@ -27,8 +26,9 @@ from scheduler.scheduler import (
     load_env,
     manual_update,
     notify,
+    local_now,
+    local_timezone_name,
     parse_windows_json,
-    read_config,
     update_config,
 )
 
@@ -88,7 +88,6 @@ def archive_old_resumes(active_target):
     RESUME_DIR.mkdir(parents=True, exist_ok=True)
     target = active_target.resolve()
     prefix_pattern = re.compile(r"^\d{8}-\d{6}-")
-    archive_timezone = ZoneInfo(read_config()["timezone"])
 
     for old in list(RESUME_DIR.glob("*.pdf")):
         if not old.is_file() or old.resolve() == target:
@@ -99,9 +98,7 @@ def archive_old_resumes(active_target):
             continue
 
         # ctime reflects when the file was created/copied onto this Linux VM.
-        stamp = datetime.fromtimestamp(
-            old.stat().st_ctime, archive_timezone
-        ).strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.fromtimestamp(old.stat().st_ctime).strftime("%Y%m%d-%H%M%S")
 
         destination = RESUME_DIR / f"{stamp}-{old.name}"
         suffix = 2
@@ -348,7 +345,7 @@ async def schedule_show_command(interaction: discord.Interaction):
     else:
         lines = [
             f"**Schedule for {state.get('date', 'unknown date')}** "
-            f"({state.get('timezone', 'unknown timezone')})"
+            f"({local_timezone_name()})"
         ]
         for item in sorted(state.get("runs", []), key=lambda r: r["time"]):
             lines.append(
@@ -358,30 +355,6 @@ async def schedule_show_command(interaction: discord.Interaction):
         message = "\n".join(lines)
 
     await interaction.response.send_message(message, ephemeral=True)
-
-
-@bot.tree.command(name="schedule_timezone", description="Set the scheduler timezone")
-@app_commands.describe(timezone="IANA timezone, for example Europe/London")
-async def schedule_timezone_command(
-    interaction: discord.Interaction,
-    timezone: str,
-):
-    if not await require_owner(interaction):
-        return
-
-    try:
-        cfg = update_config({"timezone": timezone.strip()})
-    except (ValueError, OSError, json.JSONDecodeError) as exc:
-        await interaction.response.send_message(
-            f"Configuration was not changed: {exc}", ephemeral=True
-        )
-        return
-
-    await interaction.response.send_message(
-        f"Timezone set to `{cfg['timezone']}`. The current saved schedule is unchanged; "
-        "the new timezone applies when a schedule is generated.",
-        ephemeral=True,
-    )
 
 
 @bot.tree.command(name="schedule_config", description="Set update count and schedule windows")
@@ -411,6 +384,7 @@ async def schedule_config_command(
 
     await interaction.response.send_message(
         f"Saved {cfg['updates_per_day']} updates across {len(cfg['windows'])} windows. "
+        f"Schedule times use the VM timezone ({local_timezone_name()}). "
         "The current saved schedule is unchanged; regenerate it when permitted "
         "or let the next schedule use these settings.",
         ephemeral=True,
@@ -457,8 +431,8 @@ async def status_command(interaction: discord.Interaction):
         check=False,
     ).stdout.strip() or "unknown"
 
-    timezone = read_config()["timezone"]
-    now = datetime.now(ZoneInfo(timezone))
+    now = local_now()
+    timezone = local_timezone_name(now)
     if state:
         done = sum(r["status"] == "done" for r in state.get("runs", []))
         failed = sum(r["status"] == "failed" for r in state.get("runs", []))

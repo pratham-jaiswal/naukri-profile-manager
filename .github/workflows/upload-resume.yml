@@ -2,21 +2,26 @@ name: Update Naukri Profile
 
 on:
   workflow_dispatch:
+    inputs:
+      resume_path:
+        description:
+          Absolute path to a private PDF available on the self-hosted runner
+        required: true
+        type: string
 
 jobs:
   update-profile:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Update Naukri profile
-        uses: Prateek-Wayne/naukri-resume-action@main
+        uses: ./
         with:
+          mode: both
           username: ${{ secrets.NAUKRI_USERNAME }}
           password: ${{ secrets.NAUKRI_PASSWORD }}
           profile_id: ${{ secrets.NAUKRI_PROFILE_ID }}
-          resume_path: |-
-            ./resumes/resume1.pdf
-          profile_summary: 'Your profile summary here ' # Optional: min 50 chars
-          resume_headline: 'Your resume headline here ' # Optional: max 250 chars
+          resume_path: ${{ inputs.resume_path }}
+          resume_headline: ${{ secrets.NAUKRI_RESUME_HEADLINE }}

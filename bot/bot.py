@@ -23,7 +23,14 @@ RESUME_DIR = Path.home() / "naukri-data" / "resumes"
 MAX_PDF_SIZE = 10 * 1024 * 1024
 
 sys.path.insert(0, str(ROOT))
-from scheduler.scheduler import load_env, manual_update, notify
+from scheduler.scheduler import (
+    load_env,
+    manual_update,
+    notify,
+    parse_windows_json,
+    read_config,
+    update_config,
+)
 
 
 def set_env_value(key, value):
@@ -81,6 +88,7 @@ def archive_old_resumes(active_target):
     RESUME_DIR.mkdir(parents=True, exist_ok=True)
     target = active_target.resolve()
     prefix_pattern = re.compile(r"^\d{8}-\d{6}-")
+    archive_timezone = ZoneInfo(read_config()["timezone"])
 
     for old in list(RESUME_DIR.glob("*.pdf")):
         if not old.is_file() or old.resolve() == target:
@@ -92,7 +100,7 @@ def archive_old_resumes(active_target):
 
         # ctime reflects when the file was created/copied onto this Linux VM.
         stamp = datetime.fromtimestamp(
-            old.stat().st_ctime, ZoneInfo("Asia/Kolkata")
+            old.stat().st_ctime, archive_timezone
         ).strftime("%Y%m%d-%H%M%S")
 
         destination = RESUME_DIR / f"{stamp}-{old.name}"
@@ -352,6 +360,63 @@ async def schedule_show_command(interaction: discord.Interaction):
     await interaction.response.send_message(message, ephemeral=True)
 
 
+@bot.tree.command(name="schedule_timezone", description="Set the scheduler timezone")
+@app_commands.describe(timezone="IANA timezone, for example Europe/London")
+async def schedule_timezone_command(
+    interaction: discord.Interaction,
+    timezone: str,
+):
+    if not await require_owner(interaction):
+        return
+
+    try:
+        cfg = update_config({"timezone": timezone.strip()})
+    except (ValueError, OSError, json.JSONDecodeError) as exc:
+        await interaction.response.send_message(
+            f"Configuration was not changed: {exc}", ephemeral=True
+        )
+        return
+
+    await interaction.response.send_message(
+        f"Timezone set to `{cfg['timezone']}`. The current saved schedule is unchanged; "
+        "the new timezone applies when a schedule is generated.",
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="schedule_config", description="Set update count and schedule windows")
+@app_commands.describe(
+    updates_per_day="Number of active windows, at least 2",
+    windows="JSON array of start, end, and action objects",
+)
+async def schedule_config_command(
+    interaction: discord.Interaction,
+    updates_per_day: int,
+    windows: str,
+):
+    if not await require_owner(interaction):
+        return
+
+    try:
+        parsed_windows = parse_windows_json(windows)
+        cfg = update_config({
+            "updates_per_day": updates_per_day,
+            "windows": parsed_windows,
+        })
+    except (ValueError, OSError, json.JSONDecodeError) as exc:
+        await interaction.response.send_message(
+            f"Configuration was not changed: {exc}", ephemeral=True
+        )
+        return
+
+    await interaction.response.send_message(
+        f"Saved {cfg['updates_per_day']} updates across {len(cfg['windows'])} windows. "
+        "The current saved schedule is unchanged; regenerate it when permitted "
+        "or let the next schedule use these settings.",
+        ephemeral=True,
+    )
+
+
 @bot.tree.command(name="schedule_regenerate", description="Regenerate today's schedule")
 async def schedule_regenerate_command(interaction: discord.Interaction):
     if not await require_owner(interaction):
@@ -392,7 +457,8 @@ async def status_command(interaction: discord.Interaction):
         check=False,
     ).stdout.strip() or "unknown"
 
-    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    timezone = read_config()["timezone"]
+    now = datetime.now(ZoneInfo(timezone))
     if state:
         done = sum(r["status"] == "done" for r in state.get("runs", []))
         failed = sum(r["status"] == "failed" for r in state.get("runs", []))
@@ -407,7 +473,7 @@ async def status_command(interaction: discord.Interaction):
     message = (
         "🤖 **Naukri Bot status**\n"
         f"Bot: online\nCron service: {cron}\n"
-        f"VM time: {now:%Y-%m-%d %H:%M:%S IST}\n"
+        f"Local time ({timezone}): {now:%Y-%m-%d %H:%M:%S}\n"
         f"{schedule_line}"
     )
     await interaction.response.send_message(message, ephemeral=True)

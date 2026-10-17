@@ -1,17 +1,17 @@
 {
-  "name": "naukri-profile-updater",
-  "description": "GitHub Action to keep your Naukri profile active by uploading resumes, updating profile summary, and resume headline",
+  "name": "naukri-profile-manager",
+  "description": "GitHub Action and self-hosted scheduler for Naukri resume headline updates and uploads",
   "version": "1.0.0",
-  "author": "Prateek Wayne",
+  "author": "Pratham Jaiswal",
   "type": "module",
   "private": true,
-  "homepage": "https://github.com/Prateek-Wayne/naukri-resume-action",
+  "homepage": "https://github.com/pratham-jaiswal/naukri-profile-manager",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Prateek-Wayne/naukri-resume-action.git"
+    "url": "git+https://github.com/pratham-jaiswal/naukri-profile-manager.git"
   },
   "bugs": {
-    "url": "https://github.com/Prateek-Wayne/naukri-resume-action/issues"
+    "url": "https://github.com/pratham-jaiswal/naukri-profile-manager/issues"
   },
   "keywords": [
     "actions",
@@ -19,7 +19,6 @@
     "resume",
     "profile",
     "headline",
-    "summary",
     "job",
     "automation"
   ],
@@ -31,7 +30,7 @@
   },
   "scripts": {
     "bundle": "npm run format:write && npm run package",
-    "ci-test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
+    "ci-test": "node --experimental-vm-modules --no-warnings ./node_modules/jest/bin/jest.js",
     "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
     "format:write": "npx prettier --write .",
     "format:check": "npx prettier --check .",
@@ -39,7 +38,7 @@
     "local-action": "npx @github/local-action . src/main.ts .env",
     "package": "npx rollup --config rollup.config.ts --configPlugin @rollup/plugin-typescript",
     "package:watch": "npm run package -- --watch",
-    "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
+    "test": "node --experimental-vm-modules --no-warnings ./node_modules/jest/bin/jest.js",
     "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package"
   },
   "license": "MIT",

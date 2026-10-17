@@ -18,9 +18,5 @@
       "action": "random"
     }
   ],
-  "random_action_options": [
-    "headline",
-    "resume",
-    "both"
-  ]
+  "random_action_options": ["headline", "resume", "both"]
 }

@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -11,7 +12,7 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ROOT = Path(__file__).resolve().parent.parent
 SDIR = ROOT / "scheduler"
@@ -68,39 +69,106 @@ def locked(path, blocking=True):
 
 def read_config():
     cfg = json.loads(CONFIG.read_text())
-    count = int(cfg["updates_per_day"])
-    windows = cfg["windows"]
+    return validate_config(cfg)
 
+
+def validate_config(cfg):
+    if not isinstance(cfg, dict):
+        raise ValueError("Configuration must be a JSON object")
+
+    timezone = cfg.get("timezone")
+    if not isinstance(timezone, str) or not timezone.strip():
+        raise ValueError("timezone must be a non-empty IANA timezone")
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"Unknown timezone: {timezone}") from exc
+
+    count = cfg.get("updates_per_day")
+    windows = cfg.get("windows")
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise ValueError("updates_per_day must be an integer")
+    if not isinstance(windows, list):
+        raise ValueError("windows must be a list")
     if count < 2 or count > len(windows):
         raise ValueError("updates_per_day must be between 2 and the window count")
-    if windows[0]["action"] != "headline":
+    if any(not isinstance(window, dict) for window in windows):
+        raise ValueError("Each window must be an object")
+
+    if windows[0].get("action") != "headline":
         raise ValueError("Window 1 must guarantee a headline update")
-    if windows[1]["action"] != "resume":
+    if windows[1].get("action") != "resume":
         raise ValueError("Window 2 must guarantee a resume upload")
 
-    allowed = {"headline", "resume", "both", "random"}
-    for window in windows[:count]:
-        if window["action"] not in allowed:
-            raise ValueError(f"Invalid action: {window['action']}")
-        start = minutes(window["start"])
-        end = minutes(window["end"])
+    allowed_actions = {"headline", "resume", "both", "random"}
+    previous_windows = []
+    for window in windows:
+        action = window.get("action")
+        if not isinstance(action, str) or action not in allowed_actions:
+            raise ValueError(f"Invalid action: {window.get('action')}")
+        start = minutes(window.get("start"))
+        end = minutes(window.get("end"))
         if start >= end:
             raise ValueError("Each window's start must be before its end")
+        if any(start < prior_end and prior_start < end for prior_start, prior_end in previous_windows):
+            raise ValueError("Configured windows must not overlap")
+        previous_windows.append((start, end))
 
-    options = cfg["random_action_options"]
-    if not options or any(x not in {"headline", "resume", "both"} for x in options):
+    options = cfg.get("random_action_options")
+    if not isinstance(options, list) or not options or any(
+        not isinstance(option, str) or option not in {"headline", "resume", "both"}
+        for option in options
+    ):
         raise ValueError("Invalid random_action_options")
     return cfg
 
 
+def update_config(changes):
+    allowed_changes = {"timezone", "updates_per_day", "windows"}
+    if not isinstance(changes, dict) or not changes:
+        raise ValueError("At least one configuration change is required")
+    if not set(changes).issubset(allowed_changes):
+        raise ValueError("Only timezone, updates_per_day, and windows can be changed")
+
+    with locked(SDIR / ".config.lock"):
+        cfg = json.loads(CONFIG.read_text())
+        cfg.update(changes)
+        validate_config(cfg)
+
+        temp = CONFIG.with_name(f".{CONFIG.name}.{os.getpid()}.tmp")
+        try:
+            temp.write_text(json.dumps(cfg, indent=2) + "\n")
+            os.chmod(temp, CONFIG.stat().st_mode & 0o777)
+            temp.replace(CONFIG)
+        finally:
+            temp.unlink(missing_ok=True)
+
+    return cfg
+
+
+def parse_windows_json(serialized):
+    try:
+        windows = json.loads(serialized)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("windows must be a valid JSON array") from exc
+    if not isinstance(windows, list):
+        raise ValueError("windows must be a valid JSON array")
+    return windows
+
+
 def minutes(value):
+    if not isinstance(value, str) or re.fullmatch(r"\d{2}:\d{2}", value) is None:
+        raise ValueError(f"Invalid time: {value}")
     parts = value.split(":")
     if len(parts) != 2:
         raise ValueError(f"Invalid time: {value}")
-    h, m = map(int, parts)
-    if not (0 <= h < 24 and 0 <= m < 60):
+    try:
+        hour, minute = map(int, parts)
+    except ValueError as exc:
+        raise ValueError(f"Invalid time: {value}") from exc
+    if not (0 <= hour < 24 and 0 <= minute < 60):
         raise ValueError(f"Invalid time: {value}")
-    return h * 60 + m
+    return hour * 60 + minute
 
 
 def save_state(state):
@@ -110,7 +178,7 @@ def save_state(state):
     temp.replace(STATE)
 
 
-def install_generated_jobs(runs):
+def install_generated_jobs(runs, timezone, dry_run=False):
     result = subprocess.run(
         ["crontab", "-l"], capture_output=True, text=True
     )
@@ -120,18 +188,33 @@ def install_generated_jobs(runs):
     lines = result.stdout.splitlines()
     kept = []
     inside = False
+    found_block = False
 
     for line in lines:
         if line.strip() == BEGIN:
+            if inside or found_block:
+                raise ValueError("Multiple generated cron blocks found")
             inside = True
+            found_block = True
             continue
         if line.strip() == END:
+            if not inside:
+                raise ValueError("Generated cron end marker has no matching start")
             inside = False
             continue
         if not inside:
             kept.append(line)
 
-    jobs = [BEGIN]
+    if inside:
+        raise ValueError("Generated cron start marker has no matching end")
+
+    previous_cron_tz = next(
+        (line for line in reversed(kept) if re.match(r"^\s*CRON_TZ\s*=", line)),
+        None,
+    )
+    restore_cron_tz = previous_cron_tz or f"CRON_TZ={system_timezone()}"
+
+    jobs = [BEGIN, f"CRON_TZ={timezone}"]
     for run in sorted(runs, key=lambda item: item["time"]):
         hour, minute = map(int, run["time"].split(":"))
         command = (
@@ -141,25 +224,74 @@ def install_generated_jobs(runs):
         )
         jobs.append(f"{minute} {hour} * * * {command}")
     jobs.append(END)
+    jobs.append(restore_cron_tz)
 
     output = "\n".join(kept).rstrip() + "\n\n"
     output += "\n".join(jobs) + "\n"
+
+    if dry_run:
+        print("Generated crontab block preview:")
+        print("\n".join(jobs))
+        return output
 
     subprocess.run(
         ["crontab", "-"], input=output, text=True, check=True
     )
 
 
-def generate(force=False):
+def system_timezone():
+    timezone_file = Path("/etc/timezone")
+    if timezone_file.is_file():
+        timezone = timezone_file.read_text().strip()
+        try:
+            ZoneInfo(timezone)
+            return timezone
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+
+    localtime = Path("/etc/localtime").resolve()
+    marker = f"{os.sep}zoneinfo{os.sep}"
+    resolved_path = str(localtime)
+    if marker in resolved_path:
+        timezone = resolved_path.split(marker, 1)[1].replace(os.sep, "/")
+        try:
+            ZoneInfo(timezone)
+            return timezone
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+
+    raise RuntimeError(
+        "Unable to determine the system timezone needed to restore CRON_TZ"
+    )
+
+
+def generate(force=False, dry_run=False):
     cfg = read_config()
     now = datetime.now(ZoneInfo(cfg["timezone"]))
     today = now.date().isoformat()
 
+    if dry_run:
+        if STATE.exists():
+            old = json.loads(STATE.read_text())
+        else:
+            old = {}
+        if old.get("date") == today and not force:
+            runs = old["runs"]
+            schedule_timezone = old.get("timezone", cfg["timezone"])
+        else:
+            runs = create_runs(cfg, today)
+            schedule_timezone = cfg["timezone"]
+        print(f"Schedule preview for {today} ({schedule_timezone}):")
+        for run in sorted(runs, key=lambda item: item["time"]):
+            print(f"  {run['time']} — {run['action']}")
+        install_generated_jobs(runs, schedule_timezone, dry_run=True)
+        return
+
     with locked(STATE_LOCK):
         if force:
             first_window_start = min(
-                minutes(w["start"])
-                for w in cfg["windows"][:cfg["updates_per_day"]]
+                minutes(window["start"])
+                for window in cfg["windows"][:cfg["updates_per_day"]]
             )
             current_minute = now.hour * 60 + now.minute
             if current_minute >= first_window_start:
@@ -172,9 +304,11 @@ def generate(force=False):
             old = json.loads(STATE.read_text())
             if old.get("date") == today and not force:
                 runs = old["runs"]
+                schedule_timezone = old.get("timezone", cfg["timezone"])
                 print(f"Keeping the existing schedule for {today}.")
             else:
                 runs = create_runs(cfg, today)
+                schedule_timezone = cfg["timezone"]
                 save_state({
                     "date": today,
                     "timezone": cfg["timezone"],
@@ -182,20 +316,21 @@ def generate(force=False):
                 })
         else:
             runs = create_runs(cfg, today)
+            schedule_timezone = cfg["timezone"]
             save_state({
                 "date": today,
                 "timezone": cfg["timezone"],
                 "runs": runs
             })
 
-    install_generated_jobs(runs)
+    install_generated_jobs(runs, schedule_timezone)
 
-    print(f"Schedule installed for {today} ({cfg['timezone']}):")
+    print(f"Schedule installed for {today} ({schedule_timezone}):")
     for run in sorted(runs, key=lambda item: item["time"]):
         print(f"  {run['time']} — {run['action']}")
 
     details = "\n".join(
-        f"• {run['time']} IST — {run['action']}"
+        f"• {run['time']} {schedule_timezone} — {run['action']}"
         for run in sorted(runs, key=lambda item: item["time"])
     )
     notify(f"📅 **Naukri schedule ready — {today}**\n{details}")
@@ -207,7 +342,7 @@ def create_runs(cfg, today):
 
     for index, window in enumerate(cfg["windows"][:cfg["updates_per_day"]]):
         start, end = minutes(window["start"]), minutes(window["end"])
-        available = [m for m in range(start, end) if m not in used]
+        available = [minute for minute in range(start, end) if minute not in used]
         if not available:
             raise ValueError("No unique minute available in a configured window")
 
@@ -245,7 +380,6 @@ def load_env():
 
 def _run_update(run_id):
     cfg = read_config()
-    tz = ZoneInfo(cfg["timezone"])
     run_lock = SDIR / f".run-{run_id}.lock"
 
     with locked(run_lock, blocking=False):
@@ -256,7 +390,8 @@ def _run_update(run_id):
                     return
 
                 state = json.loads(STATE.read_text())
-                if state.get("date") != datetime.now(tz).date().isoformat():
+                timezone = state.get("timezone", cfg["timezone"])
+                if state.get("date") != datetime.now(ZoneInfo(timezone)).date().isoformat():
                     print("Refusing to execute a stale schedule.")
                     return
 
@@ -289,7 +424,8 @@ def _run_update(run_id):
                 state = json.loads(STATE.read_text())
                 run = next(item for item in state["runs"] if item["id"] == run_id)
 
-                if state.get("date") != datetime.now(tz).date().isoformat():
+                timezone = state.get("timezone", cfg["timezone"])
+                if state.get("date") != datetime.now(ZoneInfo(timezone)).date().isoformat():
                     print("Date changed during execution; not modifying new schedule.")
                     return
 
@@ -301,7 +437,7 @@ def _run_update(run_id):
                         f"✅ **Naukri update succeeded**\n"
                         f"Date: {state['date']}\n"
                         f"Action: {action}\n"
-                        f"Scheduled time: {run['time']} IST\n"
+                        f"Scheduled time: {run['time']} {timezone}\n"
                         f"Attempts: {attempt}"
                     )
                     return
@@ -314,7 +450,7 @@ def _run_update(run_id):
                         f"🚨 **Naukri update FAILED**\n"
                         f"Date: {state['date']}\n"
                         f"Action: {action}\n"
-                        f"Scheduled time: {run['time']} IST\n"
+                        f"Scheduled time: {run['time']} {timezone}\n"
                         f"Attempts: 3\n"
                         "Check scheduler/cron.log on the VM."
                     )
@@ -328,7 +464,6 @@ def _run_update(run_id):
             )
             print("Update failed; retrying in 10 minutes.")
             time.sleep(600)
-
 
 
 def run_update(run_id):
@@ -386,6 +521,8 @@ def main():
 
     if sys.argv[1] == "generate" and len(sys.argv) == 2:
         generate()
+    elif sys.argv[1:] == ["generate", "--dry-run"]:
+        generate(dry_run=True)
     elif sys.argv[1] == "generate" and sys.argv[2:] == ["--force"]:
         generate(force=True)
     elif sys.argv[1] == "run" and len(sys.argv) == 3:

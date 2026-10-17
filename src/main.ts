@@ -75,17 +75,15 @@ export async function run(): Promise<void> {
       !cookies.nauk_rt ||
       !cookies.nauk_sid
     ) {
-      throw new Error('Login failed or required authentication cookies are missing');
+      throw new Error(
+        'Login failed or required authentication cookies are missing'
+      );
     }
 
     if (mode === 'headline' || mode === 'both') {
       core.info('Updating resume headline...');
 
-      const success = await updateResumeHeadline(
-        cookies,
-        profileId,
-        headline
-      );
+      const success = await updateResumeHeadline(cookies, profileId, headline);
 
       if (!success) {
         throw new Error('Resume headline update failed');
@@ -97,11 +95,7 @@ export async function run(): Promise<void> {
     if (mode === 'resume' || mode === 'both') {
       core.info(`Uploading resume: ${selectedResume}`);
 
-      const success = await uploadResume(
-        cookies,
-        selectedResume,
-        profileId
-      );
+      const success = await uploadResume(cookies, selectedResume, profileId);
 
       core.setOutput('upload_status', success ? 'success' : 'failure');
       core.setOutput('upload_time', new Date().toISOString());
@@ -113,8 +107,7 @@ export async function run(): Promise<void> {
       core.info('Resume uploaded successfully');
     }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : 'Unknown error';
 
     core.setFailed(message);
   }

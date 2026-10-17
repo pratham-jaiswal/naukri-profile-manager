@@ -1,49 +1,12 @@
 /**
- * Unit tests for the Naukri Profile Updater
- *
- * These tests validate the profile summary, resume headline, and core functionality.
+ * Unit tests for Naukri Profile Manager input behavior.
  */
 
-describe('Naukri Profile Updater - Profile Summary Validation', () => {
-  describe('Summary length validation', () => {
-    it('should require minimum 50 characters', () => {
-      const shortSummary = 'Too short';
-      const validSummary = 'A'.repeat(50);
-
-      expect(shortSummary.length).toBeLessThan(50);
-      expect(validSummary.length).toBeGreaterThanOrEqual(50);
-    });
-
-    it('should trim whitespace before validation', () => {
-      const summaryWithSpaces =
-        '  Valid summary with more than fifty characters here and more  ';
-      const trimmed = summaryWithSpaces.trim();
-
-      expect(trimmed.length).toBeGreaterThan(50);
-    });
-  });
-
-  describe('Input validation', () => {
-    it('should handle empty profile summary gracefully', () => {
-      const emptySummary = '';
-      expect(emptySummary.length).toBe(0);
-    });
-
-    it('should handle exactly 50 characters', () => {
-      const exactSummary = 'A'.repeat(50);
-      expect(exactSummary.length).toBe(50);
-    });
-
-    it('should accept summary longer than 50 characters', () => {
-      const longSummary = 'A'.repeat(100);
-      expect(longSummary.length).toBeGreaterThan(50);
-    });
-  });
-});
+import { describe, expect, it } from '@jest/globals';
 
 describe('Resume Path Handling', () => {
   it('should handle single resume path', () => {
-    const singlePath = './resumes/resume1.pdf';
+    const singlePath = './candidate-resume-1.pdf';
     const paths = [singlePath];
 
     expect(paths.length).toBe(1);
@@ -51,9 +14,9 @@ describe('Resume Path Handling', () => {
   });
 
   it('should handle multiple resume paths', () => {
-    const multiplePaths = `./resumes/resume1.pdf
-./resumes/resume2.pdf
-./resumes/resume3.pdf`;
+    const multiplePaths = `./candidate-resume-1.pdf
+  ./candidate-resume-2.pdf
+  ./candidate-resume-3.pdf`;
 
     const paths = multiplePaths
       .split('\n')
@@ -64,9 +27,9 @@ describe('Resume Path Handling', () => {
   });
 
   it('should filter out comment lines', () => {
-    const pathsWithComments = `./resumes/resume1.pdf
+    const pathsWithComments = `./candidate-resume-1.pdf
 # This is a comment
-./resumes/resume2.pdf`;
+  ./candidate-resume-2.pdf`;
 
     const paths = pathsWithComments
       .split('\n')
@@ -74,13 +37,16 @@ describe('Resume Path Handling', () => {
       .filter((line) => line && !line.startsWith('#'));
 
     expect(paths.length).toBe(2);
-    expect(paths).toEqual(['./resumes/resume1.pdf', './resumes/resume2.pdf']);
+    expect(paths).toEqual([
+      './candidate-resume-1.pdf',
+      './candidate-resume-2.pdf'
+    ]);
   });
 
   it('should filter out empty lines', () => {
-    const pathsWithEmptyLines = `./resumes/resume1.pdf
+    const pathsWithEmptyLines = `./candidate-resume-1.pdf
 
-./resumes/resume2.pdf`;
+  ./candidate-resume-2.pdf`;
 
     const paths = pathsWithEmptyLines
       .split('\n')

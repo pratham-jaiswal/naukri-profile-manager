@@ -1,8 +1,8 @@
-name: Naukri Profile Updater
+name: Naukri Profile Manager
 description:
-  Keep your Naukri profile active by uploading resumes, updating profile
-  summary, and resume headline
-author: Prateek Wayne
+  Keep your Naukri profile active by uploading resumes and updating the resume
+  headline
+author: Pratham Jaiswal
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
@@ -22,15 +22,14 @@ inputs:
     description: 'Naukri.com password'
     required: true
   resume_path:
-    description: 'Path to the resume file to upload'
-    required: true
+    description: 'Path to the resume file; required for resume and both modes'
+    required: false
   profile_id:
     description: 'profileId of the naukri.com account'
     required: true
   profile_summary:
     description:
-      'Profile summary to update (optional - keeps profile active, minimum 50
-      characters)'
+      'Legacy input; profile summary updates are not currently implemented'
     required: false
   resume_headline:
     description:

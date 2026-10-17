@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test-typescript:
-    name: TypeScript Tests
+    name: TypeScript and scheduler tests
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +24,11 @@ jobs:
           node-version-file: .node-version
           cache: yarn
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install Dependencies
         run: yarn install --frozen-lockfile
 
@@ -32,6 +37,9 @@ jobs:
 
       - name: Test
         run: yarn test
+
+      - name: Test scheduler config
+        run: python -m unittest scheduler.test_scheduler_config
 
       - name: Package
         run: yarn package

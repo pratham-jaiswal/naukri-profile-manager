@@ -126,33 +126,33 @@ PY
 )"
 
 if [[ "$BOT_READY" == "ready" ]]; then
-  if [[ -d "$ROOT_DIR/bot/venv" ]]; then
-    if [[ -f "$ROOT_DIR/bot/venv/Scripts/python.exe" ]]; then
-      BOT_PY="$ROOT_DIR/bot/venv/Scripts/python.exe"
-    else
-      BOT_PY="$ROOT_DIR/bot/venv/bin/python"
-    fi
-  fi
-
   SERVICE_NAME="naukri-discord-bot.service"
   if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo "==> Restarting Discord bot service"
-    sudo systemctl restart "$SERVICE_NAME"
+    if sudo systemctl restart "$SERVICE_NAME"; then
+      echo "Discord bot started successfully."
+    else
+      echo "Discord bot not started because the service restart failed."
+    fi
   else
     echo "==> Starting Discord bot service"
-    sudo systemctl start "$SERVICE_NAME"
+    if sudo systemctl start "$SERVICE_NAME"; then
+      echo "Discord bot started successfully."
+    else
+      echo "Discord bot not started because the service start failed."
+    fi
   fi
 
   echo "==> Service status"
-  sudo systemctl status "$SERVICE_NAME" --no-pager
+  sudo systemctl status "$SERVICE_NAME" --no-pager || true
 
   echo "==> Recent service logs"
-  sudo journalctl -u "$SERVICE_NAME" -n 60 --no-pager
+  sudo journalctl -u "$SERVICE_NAME" -n 60 --no-pager || true
 else
-  echo "Discord bot keys are not configured. Skipping bot startup; scheduler automation continues."
+  echo "Discord bot not started because DISCORD_BOT_TOKEN, DISCORD_USER_ID, and DISCORD_GUILD_ID are not all configured."
 fi
 
 echo
 
-echo "Everything is configured and started."
-echo "The scheduler is active; the Discord bot starts only when all bot keys are present."
+echo "Everything is configured."
+echo "The scheduler is active. The Discord bot remains optional unless all required bot keys are present."

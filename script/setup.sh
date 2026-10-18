@@ -47,8 +47,8 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 if ! command -v yarn >/dev/null 2>&1; then
-  echo "Yarn is required. Install it with: npm install -g yarn" >&2
-  exit 1
+  echo "Yarn is required. Installing it now with npm..."
+  sudo npm install -g yarn
 fi
 
 if ! PYTHON_BIN="$(find_python_bin)"; then

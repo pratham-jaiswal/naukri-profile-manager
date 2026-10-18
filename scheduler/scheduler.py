@@ -11,6 +11,7 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import fcntl
@@ -45,6 +46,11 @@ def notify(message):
         webhook = load_env().get("DISCORD_WEBHOOK_URL", "").strip()
         if not webhook:
             print("Discord notification skipped: webhook is not configured.")
+            return
+
+        parsed = urlparse(webhook)
+        if parsed.scheme.lower() != "https" or not parsed.netloc:
+            print("Discord notification skipped: webhook URL is not an HTTPS URL.")
             return
 
         payload = json.dumps({"content": message[:1900]}).encode("utf-8")
@@ -100,6 +106,36 @@ def read_config():
     return validate_config(cfg)
 
 
+def validate_window_order(windows):
+    if windows[0].get("action") != "headline":
+        raise ValueError("Window 1 must guarantee a headline update")
+    if windows[1].get("action") != "resume":
+        raise ValueError("Window 2 must guarantee a resume upload")
+
+    previous_windows = []
+    for window in windows:
+        action = window.get("action")
+        if not isinstance(action, str) or action not in {"headline", "resume", "both", "random"}:
+            raise ValueError(f"Invalid action: {window.get('action')}")
+
+        start = minutes(window.get("start"))
+        end = minutes(window.get("end"))
+        if start >= end:
+            raise ValueError("Each window's start must be before its end")
+        if any(start < prior_end and prior_start < end for prior_start, prior_end in previous_windows):
+            raise ValueError("Configured windows must not overlap")
+        previous_windows.append((start, end))
+
+
+def validate_random_action_options(cfg):
+    options = cfg.get("random_action_options")
+    if not isinstance(options, list) or not options or any(
+        not isinstance(option, str) or option not in {"headline", "resume", "both"}
+        for option in options
+    ):
+        raise ValueError("Invalid random_action_options")
+
+
 def validate_config(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("Configuration must be a JSON object")
@@ -117,31 +153,8 @@ def validate_config(cfg):
     if any(not isinstance(window, dict) for window in windows):
         raise ValueError("Each window must be an object")
 
-    if windows[0].get("action") != "headline":
-        raise ValueError("Window 1 must guarantee a headline update")
-    if windows[1].get("action") != "resume":
-        raise ValueError("Window 2 must guarantee a resume upload")
-
-    allowed_actions = {"headline", "resume", "both", "random"}
-    previous_windows = []
-    for window in windows:
-        action = window.get("action")
-        if not isinstance(action, str) or action not in allowed_actions:
-            raise ValueError(f"Invalid action: {window.get('action')}")
-        start = minutes(window.get("start"))
-        end = minutes(window.get("end"))
-        if start >= end:
-            raise ValueError("Each window's start must be before its end")
-        if any(start < prior_end and prior_start < end for prior_start, prior_end in previous_windows):
-            raise ValueError("Configured windows must not overlap")
-        previous_windows.append((start, end))
-
-    options = cfg.get("random_action_options")
-    if not isinstance(options, list) or not options or any(
-        not isinstance(option, str) or option not in {"headline", "resume", "both"}
-        for option in options
-    ):
-        raise ValueError("Invalid random_action_options")
+    validate_window_order(windows)
+    validate_random_action_options(cfg)
     return cfg
 
 
@@ -200,27 +213,11 @@ def save_state(state):
     temp.replace(STATE)
 
 
-def install_generated_jobs(runs, dry_run=False):
-    try:
-        result = subprocess.run(
-            ["crontab", "-l"], capture_output=True, text=True
-        )
-    except FileNotFoundError:
-        print("Cron is not available on this host; skipping generated cron installation.")
-        lines = []
-        kept = []
-        inside = False
-        found_block = False
-        after_block = False
-    else:
-        if result.returncode not in (0, 1):
-            raise RuntimeError(result.stderr or "Unable to read crontab")
-
-        lines = result.stdout.splitlines()
-        kept = []
-        inside = False
-        found_block = False
-        after_block = False
+def _legacy_cron_block_lines(lines):
+    kept = []
+    inside = False
+    found_block = False
+    after_block = False
 
     for line in lines:
         if line.strip() == BEGIN:
@@ -246,6 +243,10 @@ def install_generated_jobs(runs, dry_run=False):
     if inside:
         raise ValueError("Generated cron start marker has no matching end")
 
+    return kept
+
+
+def _generated_cron_jobs(runs):
     jobs = [BEGIN]
     for run in sorted(runs, key=lambda item: item["time"]):
         hour, minute = map(int, run["time"].split(":"))
@@ -256,7 +257,23 @@ def install_generated_jobs(runs, dry_run=False):
         )
         jobs.append(f"{minute} {hour} * * * {command}")
     jobs.append(END)
+    return jobs
 
+
+def install_generated_jobs(runs, dry_run=False):
+    try:
+        result = subprocess.run(
+            ["crontab", "-l"], capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        print("Cron is not available on this host; skipping generated cron installation.")
+        kept = []
+    else:
+        if result.returncode not in (0, 1):
+            raise RuntimeError(result.stderr or "Unable to read crontab")
+        kept = _legacy_cron_block_lines(result.stdout.splitlines())
+
+    jobs = _generated_cron_jobs(runs)
     output = "\n".join(kept).rstrip() + "\n\n"
     output += "\n".join(jobs) + "\n"
 

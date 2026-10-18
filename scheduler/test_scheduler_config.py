@@ -68,6 +68,13 @@ class SchedulerConfigTests(unittest.TestCase):
 
         self.assertIn("skipping generated cron installation", output.getvalue().lower())
 
+    def test_invalid_webhook_scheme_is_ignored(self):
+        with patch.object(scheduler, "load_env", return_value={"DISCORD_WEBHOOK_URL": "file:///tmp/test"}):
+            with patch("sys.stdout", new_callable=StringIO) as output:
+                scheduler.notify("hello")
+
+        self.assertIn("webhook URL is not an HTTPS URL", output.getvalue())
+
     def test_accepts_configuration_without_timezone(self):
         cfg = valid_config()
 

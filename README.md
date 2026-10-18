@@ -6,6 +6,9 @@ self-hosted scheduler, an optional Discord bot, and a reusable GitHub Action.
 Update your resume headline, upload and manage resumes, schedule daily profile
 updates, and receive notifications—all from your own Linux server. 🚀
 
+![Codefactor](https://img.shields.io/codefactor/grade/github/pratham-jaiswal/naukri-profile-manager?style=flat&label=Code%20Quality&labelColor=%23201f31)
+![GitHub License](https://img.shields.io/github/license/pratham-jaiswal/naukri-profile-manager?style=flat&label=License&labelColor=%23201f31)
+
 ## ✨ Features
 
 - 🔄 **Automated scheduling:** Run updates at randomized times within

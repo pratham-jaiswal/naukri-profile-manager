@@ -97,6 +97,8 @@ cd naukri-profile-manager
 
 ### Quick start
 
+For local development or a non-production machine, use the helper scripts:
+
 ```bash
 yarn setup
 yarn start
@@ -114,10 +116,26 @@ To validate the config without starting anything:
 yarn start:check
 ```
 
-The start script validates the Naukri settings, starts the scheduler, and only
-launches the Discord bot when all required bot variables are present. On
+The start script validates the Naukri settings, generates the scheduler, and
+only launches the Discord bot when all required bot variables are present. On
 non-Linux hosts, the scheduler still generates a local schedule but skips cron
 installation because `crontab` is not available there.
+
+### Production bot management
+
+On the Linux production VM, the bot is managed as a systemd service. If the
+service is already running, restart it; otherwise start it.
+
+```bash
+sudo systemctl restart naukri-discord-bot.service
+# or
+sudo systemctl start naukri-discord-bot.service
+sudo systemctl status naukri-discord-bot.service --no-pager
+sudo journalctl -u naukri-discord-bot.service -n 60 --no-pager
+```
+
+Use the same pattern when deploying a new service or checking recent logs after a
+restart.
 
 ### 2. Install updater dependencies
 

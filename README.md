@@ -326,15 +326,33 @@ Keep the server private as an additional layer of protection.
 
 ### 5. Install and run the bot
 
+Create a dedicated Python virtual environment for the bot and install the pinned bot requirements:
+
 ```bash
 sudo apt install -y python3-venv
 
 python3 -m venv bot/venv
-bot/venv/bin/python -m pip install --upgrade pip
-bot/venv/bin/python -m pip install "discord.py>=2.4,<3"
+source bot/venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r bot/requirements.txt
+```
+
+On Windows PowerShell, use:
+
+```powershell
+py -m venv bot\venv
+.\bot\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r bot\requirements.txt
 ```
 
 Start the bot for initial testing:
+
+```bash
+python bot/bot.py
+```
+
+If you are using the venv in a shell that is already activated, the command above works without prefixing `python`; otherwise use the venv path directly, for example:
 
 ```bash
 bot/venv/bin/python bot/bot.py

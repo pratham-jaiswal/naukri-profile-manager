@@ -6,6 +6,10 @@ self-hosted scheduler, an optional Discord bot, and a reusable GitHub Action.
 Update your resume headline, upload and manage resumes, schedule daily profile
 updates, and receive notifications—all from your own Linux server. 🚀
 
+See the
+[project wiki](https://github.com/pratham-jaiswal/naukri-profile-manager/wiki)
+for setup, scheduler, Discord, operations, and troubleshooting guides.
+
 ![Codefactor](https://img.shields.io/codefactor/grade/github/pratham-jaiswal/naukri-profile-manager?style=flat&label=Code%20Quality&labelColor=%23201f31)
 ![GitHub License](https://img.shields.io/github/license/pratham-jaiswal/naukri-profile-manager?style=flat&label=License&labelColor=%23201f31)
 
@@ -107,7 +111,8 @@ yarn setup
 yarn start
 ```
 
-If you want to skip the interactive `.env` prompt and edit the file yourself later:
+If you want to skip the interactive `.env` prompt and edit the file yourself
+later:
 
 ```bash
 yarn setup -- --skip-env
@@ -137,8 +142,8 @@ sudo systemctl status naukri-discord-bot.service --no-pager
 sudo journalctl -u naukri-discord-bot.service -n 60 --no-pager
 ```
 
-Use the same pattern when deploying a new service or checking recent logs after a
-restart.
+Use the same pattern when deploying a new service or checking recent logs after
+a restart.
 
 ### 2. Install updater dependencies
 
@@ -265,8 +270,8 @@ Keep the server running for scheduled jobs to execute.
 
 If you are running the project on a non-Linux system, the scheduler can still
 validate config and generate a schedule locally, but automatic recurring cron
-jobs will not be installed unless the host has `cron`/`crontab` available.
-Use a Linux VM or server for unattended scheduled automation.
+jobs will not be installed unless the host has `cron`/`crontab` available. Use a
+Linux VM or server for unattended scheduled automation.
 
 ## 🔔 Optional: Set up Discord notifications
 
@@ -376,7 +381,8 @@ Keep the server private as an additional layer of protection.
 
 ### 5. Install and run the bot
 
-Create a dedicated Python virtual environment for the bot and install the pinned bot requirements:
+Create a dedicated Python virtual environment for the bot and install the pinned
+bot requirements:
 
 ```bash
 sudo apt install -y python3-venv
@@ -402,7 +408,9 @@ Start the bot for initial testing:
 python bot/bot.py
 ```
 
-If you are using the venv in a shell that is already activated, the command above works without prefixing `python`; otherwise use the venv path directly, for example:
+If you are using the venv in a shell that is already activated, the command
+above works without prefixing `python`; otherwise use the venv path directly,
+for example:
 
 ```bash
 bot/venv/bin/python bot/bot.py

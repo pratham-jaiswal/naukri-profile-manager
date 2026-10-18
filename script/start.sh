@@ -126,21 +126,28 @@ PY
 )"
 
 if [[ "$BOT_READY" == "ready" ]]; then
-  if pgrep -f "bot/bot.py" >/dev/null 2>&1; then
-    echo "Discord bot is already running."
-  else
-    if [[ -d "$ROOT_DIR/bot/venv" ]]; then
-      if [[ -f "$ROOT_DIR/bot/venv/Scripts/python.exe" ]]; then
-        BOT_PY="$ROOT_DIR/bot/venv/Scripts/python.exe"
-      else
-        BOT_PY="$ROOT_DIR/bot/venv/bin/python"
-      fi
-
-      echo "==> Starting Discord bot"
-      nohup "$BOT_PY" "$ROOT_DIR/bot/bot.py" > "$ROOT_DIR/bot/bot.log" 2>&1 &
-      echo "Discord bot started in background."
+  if [[ -d "$ROOT_DIR/bot/venv" ]]; then
+    if [[ -f "$ROOT_DIR/bot/venv/Scripts/python.exe" ]]; then
+      BOT_PY="$ROOT_DIR/bot/venv/Scripts/python.exe"
+    else
+      BOT_PY="$ROOT_DIR/bot/venv/bin/python"
     fi
   fi
+
+  SERVICE_NAME="naukri-discord-bot.service"
+  if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    echo "==> Restarting Discord bot service"
+    sudo systemctl restart "$SERVICE_NAME"
+  else
+    echo "==> Starting Discord bot service"
+    sudo systemctl start "$SERVICE_NAME"
+  fi
+
+  echo "==> Service status"
+  sudo systemctl status "$SERVICE_NAME" --no-pager
+
+  echo "==> Recent service logs"
+  sudo journalctl -u "$SERVICE_NAME" -n 60 --no-pager
 else
   echo "Discord bot keys are not configured. Skipping bot startup; scheduler automation continues."
 fi

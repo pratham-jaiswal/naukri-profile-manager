@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="$ROOT_DIR/.env"
+
+find_python_bin() {
+  for candidate in python py python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      if "$candidate" -c "import sys; print(sys.executable)" >/dev/null 2>&1; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./script/start.sh [--check]
+
+Validates the Naukri setup, optionally validates Discord config, and starts
+the scheduler + bot if they are configured.
+EOF
+}
+
+CHECK_ONLY=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --check) CHECK_ONLY=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown argument: $arg" >&2; usage >&2; exit 1 ;;
+  esac
+done
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Missing .env. Run the setup script first." >&2
+  exit 1
+fi
+
+if ! PYTHON_BIN="$(find_python_bin)"; then
+  echo "Python 3 is required for validation." >&2
+  exit 1
+fi
+
+echo "==> Validating Naukri configuration"
+"$PYTHON_BIN" - "$ENV_FILE" <<'PY'
+import pathlib
+import sys
+
+env_path = pathlib.Path(sys.argv[1])
+env = {}
+for line in env_path.read_text(encoding="utf-8").splitlines():
+    if "=" not in line or line.strip().startswith("#"):
+        continue
+    key, value = line.split("=", 1)
+    env[key.strip()] = value.strip().strip("'\"")
+
+required = ["INPUT_USERNAME", "INPUT_PASSWORD", "INPUT_PROFILE_ID"]
+missing = [key for key in required if not env.get(key, "").strip()]
+
+if missing:
+    print("Missing required Naukri values:", ", ".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+
+resume_path = env.get("INPUT_RESUME_PATH", "").strip()
+if resume_path:
+    p = pathlib.Path(resume_path).expanduser()
+    if not p.exists():
+        print(f"Warning: INPUT_RESUME_PATH does not exist: {p}")
+else:
+    print("Warning: INPUT_RESUME_PATH is blank; resume uploads will fail until it is set.")
+
+webhook = env.get("DISCORD_WEBHOOK_URL", "").strip()
+bot_token = env.get("DISCORD_BOT_TOKEN", "").strip()
+owner_id = env.get("DISCORD_USER_ID", "").strip()
+guild_id = env.get("DISCORD_GUILD_ID", "").strip()
+
+if webhook:
+    print("Discord webhook: configured")
+else:
+    print("Discord webhook: not configured (optional)")
+
+if bot_token and owner_id and guild_id:
+    print("Discord bot: ready")
+elif bot_token or owner_id or guild_id:
+    print("Discord bot: partially configured; missing one or more of DISCORD_BOT_TOKEN, DISCORD_USER_ID, DISCORD_GUILD_ID")
+else:
+    print("Discord bot: not configured (optional)")
+
+print("Naukri config: OK")
+PY
+
+if [[ "$CHECK_ONLY" -eq 1 ]]; then
+  echo "Validation passed. Nothing started."
+  exit 0
+fi
+
+echo "==> Generating scheduler jobs"
+"$PYTHON_BIN" "$ROOT_DIR/scheduler/scheduler.py" generate
+
+BOT_READY="$("$PYTHON_BIN" - "$ENV_FILE" <<'PY'
+import pathlib
+import sys
+
+env_path = pathlib.Path(sys.argv[1])
+env = {}
+for line in env_path.read_text(encoding="utf-8").splitlines():
+    if "=" not in line or line.strip().startswith("#"):
+        continue
+    key, value = line.split("=", 1)
+    env[key.strip()] = value.strip().strip("'\"")
+
+token = env.get("DISCORD_BOT_TOKEN", "").strip()
+user_id = env.get("DISCORD_USER_ID", "").strip()
+guild_id = env.get("DISCORD_GUILD_ID", "").strip()
+
+if token and user_id and guild_id:
+    print("ready")
+else:
+    print("skip")
+PY
+)"
+
+if [[ "$BOT_READY" == "ready" ]]; then
+  if pgrep -f "bot/bot.py" >/dev/null 2>&1; then
+    echo "Discord bot is already running."
+  else
+    if [[ -d "$ROOT_DIR/bot/venv" ]]; then
+      if [[ -f "$ROOT_DIR/bot/venv/Scripts/python.exe" ]]; then
+        BOT_PY="$ROOT_DIR/bot/venv/Scripts/python.exe"
+      else
+        BOT_PY="$ROOT_DIR/bot/venv/bin/python"
+      fi
+
+      echo "==> Starting Discord bot"
+      nohup "$BOT_PY" "$ROOT_DIR/bot/bot.py" > "$ROOT_DIR/bot/bot.log" 2>&1 &
+      echo "Discord bot started in background."
+    fi
+  fi
+else
+  echo "Discord bot keys are not configured. Skipping bot startup; scheduler automation continues."
+fi
+
+echo
+
+echo "Everything is configured and started."
+echo "The scheduler is active; the Discord bot starts only when all bot keys are present."

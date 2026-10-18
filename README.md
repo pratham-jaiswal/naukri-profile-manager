@@ -95,6 +95,30 @@ git clone https://github.com/pratham-jaiswal/naukri-profile-manager.git
 cd naukri-profile-manager
 ```
 
+### Quick start
+
+```bash
+yarn setup
+yarn start
+```
+
+If you want to skip the interactive `.env` prompt and edit the file yourself later:
+
+```bash
+yarn setup -- --skip-env
+```
+
+To validate the config without starting anything:
+
+```bash
+yarn start:check
+```
+
+The start script validates the Naukri settings, starts the scheduler, and only
+launches the Discord bot when all required bot variables are present. On
+non-Linux hosts, the scheduler still generates a local schedule but skips cron
+installation because `crontab` is not available there.
+
 ### 2. Install updater dependencies
 
 ```bash
@@ -217,6 +241,11 @@ was added. The `run 1` command performs a real update, so use it only when you
 intend to modify your Naukri profile.
 
 Keep the server running for scheduled jobs to execute.
+
+If you are running the project on a non-Linux system, the scheduler can still
+validate config and generate a schedule locally, but automatic recurring cron
+jobs will not be installed unless the host has `cron`/`crontab` available.
+Use a Linux VM or server for unattended scheduled automation.
 
 ## 🔔 Optional: Set up Discord notifications
 

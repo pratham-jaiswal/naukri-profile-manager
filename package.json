@@ -29,6 +29,9 @@
     "node": ">=24"
   },
   "scripts": {
+    "setup": "bash ./script/setup.sh",
+    "start": "bash ./script/start.sh",
+    "start:check": "bash ./script/start.sh --check",
     "bundle": "npm run format:write && npm run package",
     "ci-test": "node --experimental-vm-modules --no-warnings ./node_modules/jest/bin/jest.js",
     "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",

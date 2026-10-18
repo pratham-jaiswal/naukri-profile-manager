@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import fcntl
 import json
 import os
 import random
@@ -12,6 +11,13 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+
+try:
+    import fcntl
+    msvcrt = None
+except ImportError:  # pragma: no cover - Windows fallback
+    import msvcrt
+    fcntl = None
 
 ROOT = Path(__file__).resolve().parent.parent
 SDIR = ROOT / "scheduler"
@@ -65,14 +71,25 @@ def notify(message):
 @contextmanager
 def locked(path, blocking=True):
     with path.open("a+") as handle:
-        flags = fcntl.LOCK_EX
-        if not blocking:
-            flags |= fcntl.LOCK_NB
-        fcntl.flock(handle, flags)
+        if fcntl is not None:
+            flags = fcntl.LOCK_EX
+            if not blocking:
+                flags |= fcntl.LOCK_NB
+            fcntl.flock(handle, flags)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            return
+
+        handle.seek(0)
+        mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+        msvcrt.locking(handle.fileno(), mode, 1)
         try:
             yield
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def read_config():
@@ -184,17 +201,26 @@ def save_state(state):
 
 
 def install_generated_jobs(runs, dry_run=False):
-    result = subprocess.run(
-        ["crontab", "-l"], capture_output=True, text=True
-    )
-    if result.returncode not in (0, 1):
-        raise RuntimeError(result.stderr or "Unable to read crontab")
+    try:
+        result = subprocess.run(
+            ["crontab", "-l"], capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        print("Cron is not available on this host; skipping generated cron installation.")
+        lines = []
+        kept = []
+        inside = False
+        found_block = False
+        after_block = False
+    else:
+        if result.returncode not in (0, 1):
+            raise RuntimeError(result.stderr or "Unable to read crontab")
 
-    lines = result.stdout.splitlines()
-    kept = []
-    inside = False
-    found_block = False
-    after_block = False
+        lines = result.stdout.splitlines()
+        kept = []
+        inside = False
+        found_block = False
+        after_block = False
 
     for line in lines:
         if line.strip() == BEGIN:
@@ -239,9 +265,12 @@ def install_generated_jobs(runs, dry_run=False):
         print("\n".join(jobs))
         return output
 
-    subprocess.run(
-        ["crontab", "-"], input=output, text=True, check=True
-    )
+    try:
+        subprocess.run(
+            ["crontab", "-"], input=output, text=True, check=True
+        )
+    except FileNotFoundError:
+        print("Cron is not available on this host; skipping generated cron installation.")
 
 
 def generate(force=False, dry_run=False):

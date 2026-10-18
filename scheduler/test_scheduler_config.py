@@ -41,6 +41,33 @@ def no_lock(_path, blocking=True):
 
 
 class SchedulerConfigTests(unittest.TestCase):
+    def test_windows_lock_fallback_uses_msvcrt(self):
+        calls = []
+
+        class FakeMsvcrt:
+            LK_LOCK = 1
+            LK_NBLCK = 2
+            LK_UNLCK = 3
+
+            @staticmethod
+            def locking(handle, mode, size):
+                calls.append((handle, mode, size))
+
+        with patch.object(scheduler, "fcntl", None), patch.object(scheduler, "msvcrt", FakeMsvcrt):
+            directory = Path(tempfile.mkdtemp())
+            lock_path = directory / "scheduler.lock"
+            with scheduler.locked(lock_path, blocking=False):
+                pass
+
+        self.assertTrue(calls)
+
+    def test_missing_crontab_is_skipped_cleanly(self):
+        with patch.object(scheduler.subprocess, "run", side_effect=FileNotFoundError):
+            with redirect_stdout(StringIO()) as output:
+                scheduler.install_generated_jobs([], dry_run=False)
+
+        self.assertIn("skipping generated cron installation", output.getvalue().lower())
+
     def test_accepts_configuration_without_timezone(self):
         cfg = valid_config()
 

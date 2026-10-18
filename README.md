@@ -43,7 +43,7 @@ Use the video guide below to locate your profile ID.
 
 **Video guide:**
 
-https://github.com/user-attachments/assets/44f2744e-672d-48b6-b8b7-1de1dfb7217c
+https://github.com/user-attachments/assets/f99db49d-c8bf-4c2a-9cd2-0abff348d318
 
 Keep these values private. Never publish your Naukri password or include it in a
 Git commit.

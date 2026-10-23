@@ -27,7 +27,6 @@ export const updateResumeHeadline = async (
       profileId
     };
 
-    // eslint-disable-next-line no-console
     console.log('📝 Updating resume headline...');
 
     const resp = await axios.post(resumeHeadlineUrl, data, { headers });
@@ -37,7 +36,6 @@ export const updateResumeHeadline = async (
       return false;
     }
 
-    // eslint-disable-next-line no-console
     console.log('✅ Resume headline updated successfully!');
     return true;
   } catch (error) {

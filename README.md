@@ -87,7 +87,7 @@ region.
 
 - Ubuntu Linux server
 - Node.js (use the version in `.node-version`)
-- Yarn 1.22
+- npm (included with Node.js)
 - Python 3 and `venv`
 - Git
 - A Naukri.com account and the details listed above
@@ -107,21 +107,21 @@ cd naukri-profile-manager
 For local development or a non-production machine, use the helper scripts:
 
 ```bash
-yarn setup
-yarn start
+npm run setup
+npm run start
 ```
 
 If you want to skip the interactive `.env` prompt and edit the file yourself
 later:
 
 ```bash
-yarn setup -- --skip-env
+npm run setup -- --skip-env
 ```
 
 To validate the config without starting anything:
 
 ```bash
-yarn start:check
+npm run start:check
 ```
 
 The start script validates the Naukri settings, generates the scheduler, and
@@ -148,8 +148,8 @@ a restart.
 ### 2. Install updater dependencies
 
 ```bash
-yarn install --frozen-lockfile
-yarn package
+npm ci
+npm run package
 ```
 
 This builds the distributable GitHub Action in `dist/`.
@@ -559,15 +559,15 @@ Run the safe local checks from the repository root. These tests do not contact
 Naukri or modify a profile.
 
 ```bash
-yarn test
-yarn lint
-yarn format:check
-yarn package
+npm test
+npm run lint
+npm run format:check
+npm run package
 python -m unittest scheduler.test_scheduler_config
 ```
 
 Run these commands in the same order as the CI workflow. The test script passes
-its Node flags directly, so `yarn test` works in Windows shells as well as Linux
+its Node flags directly, so `npm test` works in Windows shells as well as Linux
 CI.
 
 ### Check scheduler logs

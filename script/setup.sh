@@ -46,11 +46,6 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v yarn >/dev/null 2>&1; then
-  echo "Yarn is required. Installing it now with npm..."
-  sudo npm install -g yarn
-fi
-
 if ! PYTHON_BIN="$(find_python_bin)"; then
   echo "Python 3 is required to run the Discord bot." >&2
   exit 1
@@ -58,10 +53,10 @@ fi
 
 if [[ "$NO_INSTALL" -eq 0 ]]; then
   echo "==> Installing Node dependencies"
-  (cd "$ROOT_DIR" && yarn install --frozen-lockfile)
+  (cd "$ROOT_DIR" && npm ci)
 
   echo "==> Building the action bundle"
-  (cd "$ROOT_DIR" && yarn package)
+  (cd "$ROOT_DIR" && npm run package)
 fi
 
 echo "==> Preparing the Discord bot virtual environment"

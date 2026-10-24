@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-          cache: yarn
+          cache: npm
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -30,16 +30,16 @@ jobs:
           python-version: '3.12'
 
       - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Check Format
-        run: yarn format:check
+        run: npm run format:check
 
       - name: Test
-        run: yarn test
+        run: npm test
 
       - name: Test scheduler config
         run: python -m unittest scheduler.test_scheduler_config
 
       - name: Package
-        run: yarn package
+        run: npm run package

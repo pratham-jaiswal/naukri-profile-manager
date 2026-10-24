@@ -35,13 +35,9 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
-      - name: Install Yarn
-        id: install-yarn
-        run: npm install -g yarn
-
       - name: Install Dependencies
-        id: yarn-ci
-        run: yarn install
+        id: npm-ci
+        run: npm ci
 
       - name: Setup Ruby
         id: setup-ruby

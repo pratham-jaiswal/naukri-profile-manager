@@ -53282,14 +53282,12 @@ const updateResumeHeadline = async (cookieHeader, profileId, headline) => {
             },
             profileId
         };
-        // eslint-disable-next-line no-console
         console.log('📝 Updating resume headline...');
         const resp = await axios.post(resumeHeadlineUrl, data, { headers });
         if (resp.status !== 200) {
             console.error('Headline update failed:', resp.status, resp.data);
             return false;
         }
-        // eslint-disable-next-line no-console
         console.log('✅ Resume headline updated successfully!');
         return true;
     }

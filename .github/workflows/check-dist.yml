@@ -36,14 +36,10 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
-      - name: Install Yarn
-        id: install-yarn
-        run: npm install -g yarn
-
       - name: Install Dependencies
         id: install
-        run: yarn install
+        run: npm ci
 
       - name: Build dist/ Directory
         id: build
-        run: yarn run bundle
+        run: npm run bundle

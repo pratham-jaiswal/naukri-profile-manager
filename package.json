@@ -83,5 +83,9 @@
   "overrides": {
     "@fastify/busboy": "^3.2.4",
     "undici": "^6.29.1"
+  },
+  "resolutions": {
+    "undici": "^6.29.1",
+    "@fastify/busboy": "^3.2.4"
   }
 }

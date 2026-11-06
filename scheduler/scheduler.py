@@ -148,8 +148,8 @@ def validate_config(cfg):
         raise ValueError("updates_per_day must be an integer")
     if not isinstance(windows, list):
         raise ValueError("windows must be a list")
-    if count < 2 or count > len(windows):
-        raise ValueError("updates_per_day must be between 2 and the window count")
+    if count < 1 or count > len(windows):
+        raise ValueError("updates_per_day must be at least 1 and ", len(windows))
     if any(not isinstance(window, dict) for window in windows):
         raise ValueError("Each window must be an object")
 

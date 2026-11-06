@@ -107,11 +107,6 @@ def read_config():
 
 
 def validate_window_order(windows):
-    if windows[0].get("action") != "headline":
-        raise ValueError("Window 1 must guarantee a headline update")
-    if windows[1].get("action") != "resume":
-        raise ValueError("Window 2 must guarantee a resume upload")
-
     previous_windows = []
     for window in windows:
         action = window.get("action")
